@@ -31,9 +31,9 @@ def process_punctuation(s):
     s = _period_strip.sub('', s)
     return s.strip()
 
-def prepare_questions(dict_qus):
+def prepare_questions(questions_json):
     """ Tokenize and normalize questions from a given question json in the usual VQA format. """
-    questions = [[q['image_id'],q['question']] for q in dict_qus['questions']]
+    questions = [[q['image_id'],q['question']] for q in questions_json['questions']]
     for question in questions:
         question[1] = question[1].lower()[:-1]
         yield [ question[0], question[1]]
