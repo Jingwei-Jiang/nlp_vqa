@@ -68,9 +68,9 @@ class VQA:
         img_path = self.imgs_path+'COCO_'+ split + '2014_' + str(item).zfill(12) + '.jpg'
         return img_path
     
-    def __getitem__(self, item):
-        q = self.questions[item]
-        a = self.answers[item]
+    def __getitem__(self, idx):
+        q = self.questions[idx]
+        a = self.answers[idx]
         path_img = self.img_path_gen(q[0])
         img = Image.open(path_img).convert('RGB')
         img = Tensor(np.array(img))
