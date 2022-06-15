@@ -284,6 +284,7 @@ class ImageEmbedding(nn.Cell):
         #     nn.Dense(in_features=self.channels, out_features=output_size)
         # )
 
+        # resnet50 7x7x2048
         self.resnet50 = ResNet(ResidualBlock,
                   [3, 4, 6, 3],
                   [64, 256, 512, 1024],
@@ -291,12 +292,14 @@ class ImageEmbedding(nn.Cell):
                   [1, 2, 2, 2],
                   output_size)
 
-        self.resnet18 = ResNet(BasicBlock,
-                               [2, 2, 2, 2],
-                               [64, 64, 128, 256],
-                               [64, 128, 256, 512],
-                               [1, 2, 2, 2],
-                               output_size)
+        # resnet18 7x7x512
+        # output_size = 500
+        # self.resnet18 = ResNet(BasicBlock,
+        #                        [2, 2, 2, 2],
+        #                        [64, 64, 128, 256],
+        #                        [64, 128, 256, 512],
+        #                        [1, 2, 2, 2],
+        #                        output_size)
     def construct(self, x):
         return self.resnet50(x)
         # return self.resnet18(x)
