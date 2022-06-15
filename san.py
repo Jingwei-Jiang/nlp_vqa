@@ -2,7 +2,7 @@ import mindspore.nn as nn
 import mindspore.ops.functional as F
 from mindspore.ops import operations as P
 
-class QuesEmbedding(nn.Module):
+class QuesEmbedding(nn.Cell):
     def __init__(self, input_size=500, output_size=1024, num_layers=1, batch_first=True):
         super(QuesEmbedding, self).__init__()
         self.lstm = nn.LSTM(input_size=input_size,
@@ -45,7 +45,7 @@ class Attention(nn.Cell):
         u = vi_attended + vq
         return u
 
-class SANModel(nn.Module):
+class SANModel(nn.Cell):
     def __init__(self, vocab_size, word_emb_size=500, emb_size=1024, att_ff_size=512, output_size=1000,
                  num_att_layers=1, num_mlp_layers=1, mode='train', extract_img_features=True, features_dir=None):
         super(SANModel, self).__init__()
