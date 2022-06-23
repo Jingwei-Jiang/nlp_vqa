@@ -2,9 +2,11 @@ import json
 import re
 
 from PIL import Image
+import mindspore
 from mindspore import Tensor
 from mindspore.dataset import GeneratorDataset
 import numpy as np
+
 import mindspore.dataset.transforms as transforms
 import mindspore.dataset.vision.py_transforms as py_trans
 from mindspore.dataset.transforms.py_transforms import Compose
@@ -14,6 +16,8 @@ import mindspore.context as context
 
 from utils import *
 from config import *
+
+from bert4ms.tokenizers.bert_tokenizer import *
 
 _period_strip = re.compile(r'(?!<=\d)(\.)(?!\d)')
 _comma_strip = re.compile(r'(\d)(,)(\d)')
@@ -44,6 +48,7 @@ def prepare_answers(answers_json):
     for answer_list in answers:
         yield list(map(process_punctuation, answer_list))
 
+
 class VQA:
     def __init__(self, train=False, val=False, test=False ):
         super(VQA, self).__init__()
@@ -61,7 +66,8 @@ class VQA:
         # q and a
         self.questions = list(prepare_questions(self.questions_json))
         self.answers = list(prepare_answers(self.answers_json))
-        
+        self.tokenizer = BertTokenizer.load('bert-base-uncased')
+
 
     def img_path_gen(self, item):
         split = 'train' if self.train else 'val'
@@ -74,7 +80,11 @@ class VQA:
         path_img = self.img_path_gen(q[0])
         img = Image.open(path_img).convert('RGB')
         img = Tensor(np.array(img))
-        return  q[1], a, img
+        question_token = self.tokenizer.encode(q[1], add_special_tokens=True)
+        token_array = np.array(question_token)
+        token_array = np.pad(token_array,(0,128 - len(token_array)))
+        question_token = Tensor([token_array])
+        return  question_token, a, img
         #return img
     
     def __len__(self):
