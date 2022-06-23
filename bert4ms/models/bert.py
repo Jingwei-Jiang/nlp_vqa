@@ -353,10 +353,12 @@ class BertModel(BertPretrainedCell):
         self.num_hidden_layers = self.config.num_hidden_layers
 
     def construct(self, input_ids, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None):
+        x = Tensor([1])
+        y = Tensor([0])
         if attention_mask is None:
-            attention_mask = ops.ones_like(input_ids)
+            attention_mask = mnp.where(input_ids, x, y)
         if token_type_ids is None:
-            token_type_ids = ops.zeros_like(input_ids)
+            token_type_ids = mnp.where(input_ids, x, y)
 
         extended_attention_mask = attention_mask.expand_dims(1).expand_dims(2)
         extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
