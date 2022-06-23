@@ -1,9 +1,11 @@
 import numpy as np
+import mindspore
 import mindspore.nn as nn
 import mindspore.ops as ops
 import mindspore.ops.functional as F
 from mindspore.ops import operations as P
 from mindspore.common.tensor import Tensor
+from bert4ms.models import BertModel
 
 def _weight_variable(shape, factor=0.01):
     init_value = np.random.randn(*shape).astype(np.float32) * factor
@@ -389,8 +391,9 @@ class SANModel(nn.Cell):
 
         self.word_emb_size = word_emb_size
         self.word_embeddings = nn.Embedding(vocab_size, word_emb_size)
-        self.ques_channel = QuesEmbedding(
-            word_emb_size, output_size=emb_size, num_layers=1, batch_first=False)
+        # self.ques_channel = QuesEmbedding(
+        #     word_emb_size, output_size=emb_size, num_layers=1, batch_first=False)
+        self.ques_channel = BertModel.load('bert-base-uncased')
 
         self.san = nn.CellList(
             [Attention(d=emb_size, k=att_ff_size)] * num_att_layers)
