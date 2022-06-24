@@ -409,7 +409,7 @@ class SANModel(nn.Cell):
         # nwords = embeds.size()[1]
 
         # ques_embeddings = self.ques_channel(embeds.view(nwords, nbatch, self.word_emb_size))
-        ques_embeddings = self.ques_channel(embeds)
+        ques_embeddings = self.ques_channel(embeds)[1]
         vi = image_embeddings
         u = ques_embeddings
         for att_layer in self.san:
