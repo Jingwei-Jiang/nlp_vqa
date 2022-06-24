@@ -1,5 +1,9 @@
 import json
 import re
+import json
+import utils
+import itertools
+from collections import Counter
 
 from PIL import Image
 import mindspore
@@ -49,6 +53,24 @@ def prepare_answers(answers_json):
         yield list(map(process_punctuation, answer_list))
 
 
+def ans_vocab_gen():
+    ans_path, ques_path, image_path = utils.path_gen(train=True)
+
+    with open(ans_path, 'r') as fd:
+        answers = json.load(fd)
+
+    answer_lists = prepare_answers(answers)
+
+    all_tokens = itertools.chain.from_iterable(answer_lists)
+    counter = Counter(all_tokens)
+    ans = counter.keys()
+    # 先按个数多少排序，再按字典序排序
+    tokens = sorted(ans, key=lambda x: (counter[x], x), reverse=True)
+    ans_to_idx = {t: i for i, t in enumerate(tokens)}
+    idx_to_ans = {i: t for i, t in enumerate(tokens)}
+    return ans_to_idx, idx_to_ans
+
+
 class VQA:
     def __init__(self, train=False, val=False, test=False ):
         super(VQA, self).__init__()
@@ -67,7 +89,8 @@ class VQA:
         self.questions = list(prepare_questions(self.questions_json))
         self.answers = list(prepare_answers(self.answers_json))
         self.tokenizer = BertTokenizer.load('bert-base-uncased')
-
+        self.ans_to_idx, _ = ans_vocab_gen()
+        self.ans_vocab_len = len(self.ans_to_idx)
 
     def img_path_gen(self, item):
         split = 'train' if self.train else 'val'
@@ -84,8 +107,7 @@ class VQA:
         token_array = np.array(question_token)
         token_array = np.pad(token_array,(0,128 - len(token_array)))
         question_token = Tensor([token_array])
-        return  question_token, a, img
-        #return img
+        return question_token, a, img
     
     def __len__(self):
         return len(self.questions)
