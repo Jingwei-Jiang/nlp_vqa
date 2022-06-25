@@ -1,0 +1,16 @@
+
+
+All Tensors:
+
+index:	size:	real_size:	offset:	addr:	type:	lifelong:	life_start:	life_end:	source node name:
+%0T	#8192S	#7680S	&0	&0	OutputOnly	0	0	0	StridedSlice-op477
+
+
+All Nodes:
+
+$0	StridedSlice-op477	0	inputs[%0P, ]	outputs[%0T, ]	workspace[]	streamID[@4294967295]
+
+
+All Stream Groups:
+
+

@@ -19,8 +19,8 @@ def ans_vocab_gen():
     tokens = sorted(ans, key=lambda x: (counter[x], x), reverse=True)
     ans_to_idx = {t: i for i, t in enumerate(tokens)}
     idx_to_ans = {i: t for i, t in enumerate(tokens)}
-    print(ans_to_idx)
-    print(idx_to_ans)
+    #print(ans_to_idx)
+    #print(idx_to_ans)
     return ans_to_idx, idx_to_ans
 
 
