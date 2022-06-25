@@ -91,7 +91,7 @@ class VQA_dataset:
         self.questions = list(prepare_questions(self.questions_json))
         self.answers = list(prepare_answers(self.answers_json))
         self.tokenizer = BertTokenizer.load('bert-base-uncased')
-        self.ans_to_idx, _ = ans_vocab_gen(train, val, test)
+        self.ans_to_idx, _ = ans_vocab_gen()
         self.ans_vocab_len = len(self.ans_to_idx)
         for i, item in enumerate(self.answers):
             ans_encoding = np.zeros(self.ans_vocab_len)
@@ -114,8 +114,8 @@ class VQA_dataset:
         question_token = self.tokenizer.encode(q[1], add_special_tokens=True)
         token_array = np.array(question_token)
         token_array = np.pad(token_array,(0,128 - len(token_array)))
-        question_token = Tensor([token_array])
-        return question_token, a, img
+        q = Tensor([token_array])
+        return q, a, img
     
     def __len__(self):
         return len(self.questions)
@@ -129,7 +129,7 @@ def data_loader(train=False, val=False, test=False):
         shuffle=train
     )
     compose_trans = trans_gen(train, val, test)
-    loader = loader.map(operations=compose_trans, input_columns="i")
+    loader = loader.map(operations=compose_trans, input_columns="img")
     # 去除不足一个batch的数据
     loader = loader.batch(batch_size=batch_size, drop_remainder=True)
     loader.source = vqa_dataset
