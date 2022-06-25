@@ -96,7 +96,7 @@ class VQA_dataset:
         for i, item in enumerate(self.answers):
             ans_encoding = np.zeros(self.ans_vocab_len)
             for ans in item:
-                ans_encoding[self.ans_to_idx[ans]] += (1.0 / alter_ans_num)
+                ans_encoding[self.ans_to_idx[ans]] += 1.0
             self.answers[i] = ans_encoding
 
     def img_path_gen(self, item):

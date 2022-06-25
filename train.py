@@ -3,12 +3,13 @@ import os.path
 import mindspore
 from mindspore import Tensor, nn, Model, context
 from mindspore import load_checkpoint, load_param_into_net
-from mindspore import ops as P
+from mindspore import ops
 from mindspore.ops import functional as F
 from mindspore.ops import composite as C
 from mindspore.common.parameter import ParameterTuple
 from mindspore.train.callback import LossMonitor, CheckpointConfig, ModelCheckpoint, TimeMonitor
 from mindspore.nn.loss.loss import _Loss
+from mindspore.nn import WithLossCell
 import numpy as np
 from tqdm import tqdm
 import config
@@ -20,29 +21,35 @@ import json
 import math
 from datetime import datetime
 
+
+class NLLLoss(_Loss):
+    def __init__(self, reduction='mean'):
+        super(NLLLoss, self).__init__(reduction)
+        self.reduce_sum = ops.ReduceSum()
+        self.log_softmax = ops.LogSoftmax(axis=0)
+
+    def construct(self, logits, label):
+        nll = -self.log_softmax(logits)
+        loss = self.reduce_sum(nll * label / config.alter_ans_num, axis=1).mean()
+        return self.get_loss(loss)
+
+
+class WithLossCell(nn.Cell):
+    """
+    The cell wrapped with NLL loss, for train only
+    """
+    def __init__(self, model):
+        super(WithLossCell, self).__init__(auto_prefix=False)
+        self._loss_fn = NLLLoss()
+        self.net = model
+
+    def construct(self, q, a, img):
+        out = self.net(q, img)
+        loss = self._loss_fn(out, a)
+        return loss
+
+
 class TrainOneStepCell(nn.Cell):
-    """
-    Network training package class.
-
-    Wraps the network with an optimizer. The resulting Cell be trained without inputs.
-    Backward graph will be created in the construct function to do parameter updating. Different
-    parallel modes are available to run the training.
-
-    Args:
-        network (Cell): The training network.
-        optimizer (Cell): Optimizer for updating the weights.
-        sens (Number): The scaling number to be filled as the input of backpropagation. Default value is 1.0.
-
-    Outputs:
-        Tensor, a scalar Tensor with shape :math:`()`.
-
-    Examples:
-        >>> net = Net()
-        >>> loss_fn = nn.SoftmaxCrossEntropyWithLogits()
-        >>> optim = nn.Momentum(net.trainable_params(), learning_rate=0.1, momentum=0.9)
-        >>> loss_net = nn.WithLossCell(net, loss_fn)
-        >>> train_net = nn.TrainOneStepCell(loss_net, optim)
-    """
     def __init__(self, network, optimizer, sens=1.0):
         super(TrainOneStepCell, self).__init__(auto_prefix=False)
         self.network = network
@@ -52,26 +59,34 @@ class TrainOneStepCell(nn.Cell):
         self.grad = C.GradOperation(get_by_list=True)
         self.sens = sens
 
-    def construct(self, v, q, a, item, q_len):
+    def construct(self, q, a, img):
         weights = self.weights
-        loss = self.network(v, q, a, item, q_len)
-        sens = P.Fill()(P.DType()(loss), P.Shape()(loss), self.sens)
-        grads = self.grad(self.network, weights)(v, q, a, item, q_len)
+        loss = self.network(q, a)
+        sens = ops.Fill()(ops.DType()(loss), ops.Shape()(loss), self.sens)
+        grads = self.grad(self.network, weights)(q, a, img, sens)
         return F.depend(loss, self.optimizer(grads))
 
-class NLLLoss(_Loss):
-    '''
-       NLLLoss function
-    '''
-    def __init__(self, reduction='mean'):
-        super(NLLLoss, self).__init__(reduction)
-        self.reduce_sum = P.ReduceSum()
-        self.log_softmax = P.LogSoftmax(axis=0)
 
-    def construct(self, logits, label):
-        nll = -self.log_softmax(logits)
-        loss = self.reduce_sum(nll * label / 10, axis=1).mean()
-        return self.get_loss(loss)
+class TrainNetWrapper(nn.Cell):
+    """
+    The highest level train cell. (use it directly)
+    """
+
+    def __init__(self, model):
+        super(TrainNetWrapper, self).__init__(auto_prefix=False)
+        self.net = model
+
+        self.loss_net = WithLossCell(self.net)
+        optimizer = nn.Adam(params=self.net.trainable_params(), learning_rate=config.initial_lr)
+
+        self.loss_train_net = TrainOneStepCell(self.loss_net, optimizer)
+
+    def construct(self, q, a, img):
+        loss = self.loss_train_net(q, img)
+        out = self.net(q, a)
+        accuracy = utils.batch_accuracy(out, a)
+        return loss, accuracy
+
 
 class OutLossAccuracyWrapper(nn.Cell):
     """
@@ -82,93 +97,48 @@ class OutLossAccuracyWrapper(nn.Cell):
         loss: a scalar value
         accuracy: a Tensor of shape (batch_size, 1)
     """
-    def __init__(self, backbone):
+    def __init__(self, model):
         super(OutLossAccuracyWrapper, self).__init__()
-        self.net = backbone
+        self.net = model
         self._loss_fn = NLLLoss()
 
-    def construct(self, v, q, a, item, q_len):
-        output = self.net(v, q, q_len)
+    def construct(self, q, a, img):
+        output = self.net(q, img)
         loss = self._loss_fn(output, a)
         accuracy = utils.batch_accuracy(output, a)
         return output, loss, accuracy
 
-class WithLossCell(nn.Cell):
-    """
-    The cell wrapped with NLL loss, for train only
-    """
-    def __init__(self, backbone):
-        super(WithLossCell, self).__init__(auto_prefix=False)
-        self._loss_fn = NLLLoss()
-        self._backbone = backbone
-        self.reduce_sum = P.ReduceSum()
 
-    def construct(self, v, q, a, item, q_len):
-        out = self._backbone(v, q, q_len)
-        loss = self._loss_fn(out, a)
-        return loss
-
-class TrainNetWrapper(nn.Cell):
-    """
-    The highest level train cell. (use it directly)
-    """
-    def __init__(self, backbone):
-        super(TrainNetWrapper, self).__init__(auto_prefix=False)
-        self.net = backbone
-        
-        loss_net = WithLossCell(backbone)
-        optimizer = nn.Adam(params=net.trainable_params(), learning_rate=config.initial_lr)
-        
-        self.loss_train_net = TrainOneStepCell(loss_net, optimizer)
-
-    def construct(self, v, q, a, item, q_len):
-        loss = self.loss_train_net(v, q, a, item, q_len)
-        output = self.net(v, q, q_len)
-        accuracy = utils.batch_accuracy(output, a)
-        # print(accuracy)
-        return loss, accuracy
-
-def run(net, loader, tracker, train=False, prefix='', epoch=0):
+def run(net, loader, epoch, train=False, prefix=''):
     """ Run an epoch over the given loader """
-    arg_max = P.Argmax(axis=1, output_type=mindspore.int32)
-    cat = P.Concat(axis=0) # Warning: `Concat` a list of tensors is not supported in mindspore 1.1.x
+    arg_max = ops.Argmax(axis=1, output_type=mindspore.int32)
+    cat = ops.Concat(axis=0)
+    losses = []
+    accs = []
 
     if train:
-        net.set_train()
-        tracker_class, tracker_params = tracker.MovingMeanMonitor, {'momentum': 0.99}
+        net.set_train(True)
     else:
         net.set_train(False)
-        tracker_class, tracker_params = tracker.MeanMonitor, {}
-        answ = []
-        idxs = []
-        accs = []
+        answers = []
 
     tq = tqdm(loader, desc='{} E{:03d}'.format(prefix, epoch), ncols=0, total=math.ceil(len(loader.source) / config.batch_size))
-    loss_tracker = tracker.track('{}_loss'.format(prefix), tracker_class(**tracker_params))
-    acc_tracker = tracker.track('{}_acc'.format(prefix), tracker_class(**tracker_params))
-    for v, q, a, idx, q_len in tq:
+    for q, a, img in tq:
         if train:
-            loss, acc = net(v, q, a, idx, q_len)
+            loss, acc = net(q, a, img)
         else:
-            output, loss, acc = net(v, q, a, idx, q_len)
+            output, loss, acc = net(q, a, img)
             answer = arg_max(output)
-            answ.append(answer.view(-1))
-            accs.append(acc.view(-1))
-            idxs.append(idx.view(-1))
-        
-        # Update loss and accuracy in console line
-        loss_tracker.append(loss.asnumpy())
-        for a in acc.asnumpy():
-            acc_tracker.append(a)
-        fmt = '{:.4f}'.format
-        tq.set_postfix(loss=fmt(loss_tracker.mean.value), acc=fmt(acc_tracker.mean.value))
-    
+            answers.append(answer.view(-1))
+        losses.append(loss.view(-1))
+        accs.append(acc.view(-1))
+    answers = list(map(int, list(cat(answers).asnumpy())))
+    accs = list(cat(accs).asnumpy().astype(float))
     if not train:
-        # Cast to python types for JSON serialization
-        answ = list(map(int, list(cat(answ).asnumpy())))
-        accs = list(cat(accs).asnumpy().astype(float))
-        idxs = list(map(int, list(cat(idxs).asnumpy())))
-        return answ, accs, idxs
+        return answers, accs
+    else:
+        return losses, accs
+
 
 if __name__ == '__main__':
     # if config.device == 'GPU': os.environ['CUDA_VISIBLE_DEVICES'] = '1' # select GPU if necessary
@@ -179,7 +149,6 @@ if __name__ == '__main__':
     target_name = os.path.join('logs', '{}.ckpt'.format(name))
     print('The model will be saved to {}'.format(target_name))
 
-    train_loader = dataset.data_loader(train=True)
     val_loader = dataset.data_loader(val=True)
 
     model = san.SANModel()
@@ -190,43 +159,41 @@ if __name__ == '__main__':
     #         print("Successfully loaded pretrained model from {}.".format(config.pretrained_model_path))
     #     load_param_into_net(SAN, pretrain_params)
 
-    tracker = utils.Tracker()
-    train_model = TrainNetWrapper(model) # for train
-    eval_model = OutLossAccuracyWrapper(model) # for evaluation
+    train_net = TrainNetWrapper(model) # for train
+    eval_net = OutLossAccuracyWrapper(model) # for evaluation
     step = 0
 
     for epoch in range(config.epochs):
-        # train_loader = data.get_loader(train=True) # not sure if it matters?
+        train_loader = dataset.data_loader(train=True)
         
         """
         Wrapped train with `tqdm`
         """
-        run(train_model, train_loader, tracker, train=True, prefix='train', epoch=epoch)
-        r = run(eval_model, val_loader, tracker, train=False, prefix='val', epoch=epoch)
+        run(train_net, train_loader,train=True, prefix='train', epoch=epoch)
+        answers, accs = run(eval_net, val_loader, train=False, prefix='val', epoch=epoch)
         
         # Calculate the validate accuracy mean of each batch
-        val_acc = []
-        for acc_list in tracker.to_dict()['val_acc']:
-            val_acc.append(np.mean(acc_list).astype(float))
+        total_acc = 0
+        for acc_list in accs:
+            total_acc += sum(acc_list)
+        total_acc /= len(accs)*len(accs[0])
 
         results = {
             'name': name,
             # 'tracker': tracker.to_dict(),
-            'accuracy': val_acc,
-            'config': config_as_dict,
+            'accuracy': total_acc,
             'eval': {
-                'answers': r[0],
-                'accuracies': r[1],
-                'idx': r[2],
+                'answers': answers,
+                'accuracies': accs
             },
-            'vocab': train_loader.source.vocab,
+            'vocab': train_loader.source.ans_to_idx,
         }
 
         # Save model as CKPT every 5 epochs
-        if epoch % 5 == 0: mindspore.save_checkpoint(train_net.net, ckpt_file_name=os.path.join('logs', '{}.ckpt'.format(name)))
+        if epoch % 5 == 0:
+            mindspore.save_checkpoint(train_net.net, ckpt_file_name=os.path.join('logs', '{}.ckpt'.format(name)))
         
         # Save train meta info as JSON
         with open(os.path.join('logs', 'TrainRecord_{}.json'.format(name)), 'w') as fp:
             fp.write(json.dumps(results))
-        
-        # train_loader.reset() # not sure if it matters?
+
