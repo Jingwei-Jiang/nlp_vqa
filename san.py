@@ -395,8 +395,8 @@ class SANModel(nn.Cell):
             nn.Dropout(0.5),
             nn.Dense(emb_size, output_size))
 
-    def forward(self, images, questions, image_ids):
-        image_embeddings = self.image_channel(images, image_ids)
+    def forward(self, questions, images):
+        image_embeddings = self.image_channel(images)
         embeds = self.word_embeddings(questions)
         # nbatch = embeds.size()[0]
         # nwords = embeds.size()[1]

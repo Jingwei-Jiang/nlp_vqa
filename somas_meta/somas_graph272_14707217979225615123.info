@@ -1,0 +1,20 @@
+
+
+All Tensors:
+
+index:	size:	real_size:	offset:	addr:	type:	lifelong:	life_start:	life_end:	source node name:
+%0T	#512S	#4S	&0	&0	Common	0	0	1	SoftmaxCrossEntropyWithLogits-op604
+%1T	#512S	#40S	&0	&0	OutputOnly	0	0	0	SoftmaxCrossEntropyWithLogits-op604
+%2T	#512S	#40S	&0	&0	Workspace	0	0	0	SoftmaxCrossEntropyWithLogits-op604
+%3T	#512S	#4S	&0	&0	OutputOnly	0	1	1	Reshape-op605
+
+
+All Nodes:
+
+$0	SoftmaxCrossEntropyWithLogits-op604	0	inputs[%0P, %1P, ]	outputs[%0T, %1T, ]	workspace[%2T, ]	streamID[@4294967295]
+$1	Reshape-op605	0	inputs[%0T, ]	outputs[%3T, ]	workspace[]	streamID[@4294967295]
+
+
+All Stream Groups:
+
+

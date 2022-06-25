@@ -124,7 +124,7 @@ def data_loader(train=False, val=False, test=False):
     vqa_dataset = VQA_dataset(train, val, test)
     loader = GeneratorDataset(
         vqa_dataset,
-        column_names=["q", "a", "i"],
+        column_names=["q", "a", "img"],
         shuffle=train
     )
     compose_trans = trans_gen(train, val, test)
