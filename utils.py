@@ -1,6 +1,7 @@
 from config import *
 from PIL import Image
-
+from mindspore import ops
+import mindspore
 import mindspore.dataset.vision.py_transforms as py_trans
 from mindspore.dataset.transforms.py_transforms import Compose
 
@@ -39,3 +40,21 @@ def trans_gen( train=False, val=False, test=False ):
 
     # 通过Compose操作将transforms列表中函数作用于数据集图片
     return Compose(transforms_dict[mode])
+
+
+def batch_accuracy(predicted, answers):
+    """ Compute the accuracies for a batch of predictions and answers """
+    print("predicted:", predicted)
+    print("answers:", answers)
+    arg_max = ops.Argmax(axis=1, output_type=mindspore.int32)
+    gather = ops.GatherD()
+    minimum = ops.Minimum()
+    unsqueeze = ops.ExpandDims()
+    squeeze = ops.Squeeze(1)
+
+    predicted_index = arg_max(predicted)
+    predicted_index = unsqueeze(predicted_index, 1)
+
+    agreeing = gather(answers, 1, predicted_index)
+    agreeing = squeeze(agreeing)
+    return minimum(agreeing * 0.3, 1.0)

@@ -1,0 +1,18 @@
+
+
+All Tensors:
+
+index:	size:	real_size:	offset:	addr:	type:	lifelong:	life_start:	life_end:	source node name:
+%0T	#512S	#4S	&0	&0	OutputOnly	0	0	0	SoftmaxCrossEntropyWithLogits-op443
+%1T	#512S	#40S	&0	&0	OutputOnly	0	0	0	SoftmaxCrossEntropyWithLogits-op443
+%2T	#512S	#40S	&0	&0	Workspace	0	0	0	SoftmaxCrossEntropyWithLogits-op443
+
+
+All Nodes:
+
+$0	SoftmaxCrossEntropyWithLogits-op443	0	inputs[%0P, %1P, ]	outputs[%0T, %1T, ]	workspace[%2T, ]	streamID[@4294967295]
+
+
+All Stream Groups:
+
+

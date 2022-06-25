@@ -1,7 +1,11 @@
 # nlp_vqa
 ### 环境说明
+
+python3.7.5
+
+mindspore1.3.0
+
 mindspore支持cpu运行
-若要在cpu运行，建议在python3.8环境下安装mindspore1.7.0
 
 ### 文件说明
 + `data.align.py`：数据预处理，QA按图片id对齐
