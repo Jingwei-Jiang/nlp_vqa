@@ -53,8 +53,9 @@ def prepare_answers(answers_json):
         yield list(map(process_punctuation, answer_list))
 
 
-def ans_vocab_gen():
-    ans_path, ques_path, image_path = utils.path_gen(train=True)
+def ans_vocab_gen(train=False, val=False, test=False):
+    print("Generating answers vocab...")
+    ans_path, ques_path, image_path = path_gen(train, val, test)
 
     with open(ans_path, 'r') as fd:
         answers = json.load(fd)
@@ -68,12 +69,13 @@ def ans_vocab_gen():
     tokens = sorted(ans, key=lambda x: (counter[x], x), reverse=True)
     ans_to_idx = {t: i for i, t in enumerate(tokens)}
     idx_to_ans = {i: t for i, t in enumerate(tokens)}
+    print("Answers vocab is generated")
     return ans_to_idx, idx_to_ans
 
 
-class VQA:
-    def __init__(self, train=False, val=False, test=False ):
-        super(VQA, self).__init__()
+class VQA_dataset:
+    def __init__(self, train=False, val=False, test=False):
+        super(VQA_dataset, self).__init__()
         self.train = train
         self.val = val
         self.test = test
@@ -89,8 +91,13 @@ class VQA:
         self.questions = list(prepare_questions(self.questions_json))
         self.answers = list(prepare_answers(self.answers_json))
         self.tokenizer = BertTokenizer.load('bert-base-uncased')
-        self.ans_to_idx, _ = ans_vocab_gen()
+        self.ans_to_idx, _ = ans_vocab_gen(train, val, test)
         self.ans_vocab_len = len(self.ans_to_idx)
+        for i, item in enumerate(self.answers):
+            ans_encoding = np.zeros(self.ans_vocab_len)
+            for ans in item:
+                ans_encoding[self.ans_to_idx[ans]] += (1.0 / alter_ans_num)
+            self.answers[i] = ans_encoding
 
     def img_path_gen(self, item):
         split = 'train' if self.train else 'val'
@@ -102,7 +109,7 @@ class VQA:
         a = self.answers[idx]
         path_img = self.img_path_gen(q[0])
         img = Image.open(path_img).convert('RGB')
-        img = Tensor(np.array(img))
+        img = Tensor(np.asarray(img))
         question_token = self.tokenizer.encode(q[1], add_special_tokens=True)
         token_array = np.array(question_token)
         token_array = np.pad(token_array,(0,128 - len(token_array)))
@@ -111,17 +118,18 @@ class VQA:
     
     def __len__(self):
         return len(self.questions)
-    
-def get_loader(train=False, val=False, test=False):
 
-    split =VQA(train,val,test)
+
+def data_loader(train=False, val=False, test=False):
+    vqa_dataset = VQA_dataset(train, val, test)
     loader = GeneratorDataset(
-        split,
-        column_names=["q","a","i"],
+        vqa_dataset,
+        column_names=["q", "a", "i"],
         shuffle=train
     )
     compose_trans = trans_gen(train, val, test)
     loader = loader.map(operations=compose_trans, input_columns="i")
-    loader = loader.batch(batch_size=4,drop_remainder=True )
-    loader.source = split
+    # 去除不足一个batch的数据
+    loader = loader.batch(batch_size=batch_size, drop_remainder=True)
+    loader.source = vqa_dataset
     return loader

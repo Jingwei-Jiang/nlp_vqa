@@ -381,16 +381,13 @@ class Attention(nn.Cell):
         return u
 
 class SANModel(nn.Cell):
-    def __init__(self, vocab_size, word_emb_size=500, emb_size=1024, att_ff_size=512, output_size=1000,
-                 num_att_layers=1, num_mlp_layers=1, mode='train', extract_img_features=True, features_dir=None):
+    def __init__(self, ques_vocab_size, word_emb_size=500, emb_size=1024, att_ff_size=768, output_size=17625,
+                 num_att_layers=1):
         super(SANModel, self).__init__()
-        self.mode = mode
-        self.features_dir = features_dir
-        self.image_channel = ImageEmbedding(output_size=emb_size, mode=mode, extract_img_features=extract_img_features,
-                                            features_dir=features_dir)
+        self.image_channel = ImageEmbedding(output_size=emb_size)
 
         self.word_emb_size = word_emb_size
-        self.word_embeddings = nn.Embedding(vocab_size, word_emb_size)
+        self.word_embeddings = nn.Embedding(ques_vocab_size, word_emb_size)
         # self.ques_channel = QuesEmbedding(
         #     word_emb_size, output_size=emb_size, num_layers=1, batch_first=False)
         self.ques_channel = BertModel.load('bert-base-uncased')
@@ -399,7 +396,7 @@ class SANModel(nn.Cell):
             [Attention(d=emb_size, k=att_ff_size)] * num_att_layers)
 
         self.mlp = nn.SequentialCell(
-            nn.Dropout(p=0.5),
+            nn.Dropout(0.5),
             nn.Dense(emb_size, output_size))
 
     def forward(self, images, questions, image_ids):
