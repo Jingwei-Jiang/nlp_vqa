@@ -152,7 +152,7 @@ if __name__ == '__main__':
     target_name = os.path.join('logs', '{}.ckpt'.format(name))
     print('The model will be saved to {}'.format(target_name))
 
-    val_loader = dataset.data_loader(val=True)
+    val_loader = dataset.get_loader(val=True)
 
     model = san.SANModel()
 
@@ -167,7 +167,7 @@ if __name__ == '__main__':
     step = 0
 
     for epoch in range(config.epochs):
-        train_loader = dataset.data_loader(train=True)
+        train_loader = dataset.get_loader(train=True)
         
         """
         Wrapped train with `tqdm`

@@ -121,7 +121,7 @@ class VQA_dataset:
         return len(self.questions)
 
 
-def data_loader(train=False, val=False, test=False):
+def get_loader(train=False, val=False, test=False):
     vqa_dataset = VQA_dataset(train, val, test)
     loader = GeneratorDataset(
         vqa_dataset,
