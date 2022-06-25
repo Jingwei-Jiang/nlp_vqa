@@ -53,9 +53,9 @@ def prepare_answers(answers_json):
         yield list(map(process_punctuation, answer_list))
 
 
-def ans_vocab_gen(train=False, val=False, test=False):
+def ans_vocab_gen():
     print("Generating answers vocab...")
-    ans_path, ques_path, image_path = path_gen(train, val, test)
+    ans_path, ques_path, image_path = path_gen(train=True)
 
     with open(ans_path, 'r') as fd:
         answers = json.load(fd)
@@ -96,8 +96,9 @@ class VQA_dataset:
         for i, item in enumerate(self.answers):
             ans_encoding = np.zeros(self.ans_vocab_len)
             for ans in item:
-                ans_encoding[self.ans_to_idx[ans]] += 1.0
-            self.answers[i] = ans_encoding
+                if ans in self.ans_to_idx.keys():
+                    ans_encoding[self.ans_to_idx[ans]] += 1.0
+            self.answers[i] = ans_encoding/sum(ans_encoding) * 10
 
     def img_path_gen(self, item):
         split = 'train' if self.train else 'val'

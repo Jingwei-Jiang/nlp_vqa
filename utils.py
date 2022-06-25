@@ -44,7 +44,8 @@ def trans_gen( train=False, val=False, test=False ):
 
 def batch_accuracy(predicted, answers):
     """ Compute the accuracies for a batch of predictions and answers """
-    print(predicted, answers)
+    print("predicted:", predicted)
+    print("answers:", answers)
     arg_max = ops.Argmax(axis=1, output_type=mindspore.int32)
     gather = ops.GatherD()
     minimum = ops.Minimum()
