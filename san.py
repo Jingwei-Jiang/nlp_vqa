@@ -268,7 +268,7 @@ class ResNet(nn.Cell):
 
 
 class ImageEmbedding(nn.Cell):
-    def __init__(self, output_size=2000):
+    def __init__(self, output_size=768):
         self.in_channels = 3
         self.channels = 64
         self.dropout = nn.Dropout(0.5)
@@ -277,65 +277,61 @@ class ImageEmbedding(nn.Cell):
             _bn(self.channels),
             ops.ReLU(),
             nn.MaxPool2d(kernel_size=3, stride=2, pad_mode="same"),  # 56x56x64
-            _conv3x3(self.channels, self.channels),
-            nn.BatchNorm2d(self.channels),
+            _conv3x3(self.channels, self.channels*2), # 56x56x128
+            nn.BatchNorm2d(self.channels*2),
             nn.ReLU(),
-            nn.MaxPool2d(kernel_size=(2, 2)),  # 28x28x64
-            _conv3x3(self.channels, self.channels*2),
-            nn.BatchNorm2d(self.channels * 2),
+            nn.MaxPool2d(kernel_size=(2, 2)),  # 28x28x128
+            _conv3x3(self.channels*2, self.channels*4),  # 28x28x256
+            nn.BatchNorm2d(self.channels * 4),
             nn.ReLU(),
-            nn.MaxPool2d(kernel_size=(2, 2)),  # 14x14x128
-            _conv3x3(self.channels*2, self.channels * 2),  # 14x14x128
-            # nn.BatchNorm2d(self.channels*2),
-            nn.AvgPool2d(kernel_size=(2, 2)),  # 7x7x128
-            nn.Flatten()
+            nn.MaxPool2d(kernel_size=(2, 2)),  # 14x14x256
+            _conv3x3(self.channels*4, self.channels * 8)  # 14x14x512
         ])
 
-        self.fc = nn.SequentialCell(
-            nn.Dense(in_features=self.channels * 2, out_features=self.channels),
-            nn.Dense(in_features=self.channels, out_features=output_size)
-        )
-
-        self.simple_cnn = nn.SequentialCell(self.cnn, self.fc)
+        self.simple_cnn = nn.SequentialCell(self.cnn)
         #resnet18 7x7x512
         # output_size = 500
-        self.resnet18 = ResNet(BasicBlock,
-                               [2, 2, 2, 2],
-                               [64, 64, 128, 256],
-                               [64, 128, 256, 512],
-                               [1, 2, 2, 2],
-                               output_size)
-        self.resnet34 = ResNet(BasicBlock,
-                               [3, 4, 6, 3],
-                               [64, 64, 128, 256],
-                               [64, 128, 256, 512],
-                               [1, 2, 2, 2],
-                               output_size)
+        # self.resnet18 = ResNet(BasicBlock,
+        #                        [2, 2, 2, 2],
+        #                        [64, 64, 128, 256],
+        #                        [64, 128, 256, 512],
+        #                        [1, 2, 2, 2],
+        #                        output_size)
+        # self.resnet34 = ResNet(BasicBlock,
+        #                        [3, 4, 6, 3],
+        #                        [64, 64, 128, 256],
+        #                        [64, 128, 256, 512],
+        #                        [1, 2, 2, 2],
+        #                        output_size)
         # resnet50 7x7x2048
-        self.resnet50 = ResNet(ResidualBlock,
-                               [3, 4, 6, 3],
-                               [64, 256, 512, 1024],
-                               [256, 512, 1024, 2048],
-                               [1, 2, 2, 2],
-                               output_size)
+        # self.resnet50 = ResNet(ResidualBlock,
+        #                        [3, 4, 6, 3],
+        #                        [64, 256, 512, 1024],
+        #                        [256, 512, 1024, 2048],
+        #                        [1, 2, 2, 2],
+        #                        output_size)
         # resnet101 7x7x2048
-        self.resnet50 = ResNet(ResidualBlock,
-                               [3, 4, 23, 3],
-                               [64, 256, 512, 1024],
-                               [256, 512, 1024, 2048],
-                               [1, 2, 2, 2],
-                               output_size)
+        # self.resnet50 = ResNet(ResidualBlock,
+        #                        [3, 4, 23, 3],
+        #                        [64, 256, 512, 1024],
+        #                        [256, 512, 1024, 2048],
+        #                        [1, 2, 2, 2],
+        #                        output_size)
         # resnet152 7x7x2048
-        self.resnet50 = ResNet(ResidualBlock,
-                               [3, 8, 36, 3],
-                               [64, 256, 512, 1024],
-                               [256, 512, 1024, 2048],
-                               [1, 2, 2, 2],
-                               output_size)
+        # self.resnet50 = ResNet(ResidualBlock,
+        #                        [3, 8, 36, 3],
+        #                        [64, 256, 512, 1024],
+        #                        [256, 512, 1024, 2048],
+        #                        [1, 2, 2, 2],
+        #                        output_size)
     def construct(self, x):
-        return self.resnet50(x)
+        # return self.resnet50(x)
         # return self.resnet18(x)
-        # return self.simple_cnn(x)
+        x = self.simple_cnn(x)
+        transpose = ops.Transpose()
+        x = transpose(x, (2, 0, 1))
+        flatten = nn.Flatten()
+        return flatten(x)
 
 class QuesEmbedding(nn.Cell):
     def __init__(self, input_size=500, output_size=1024, num_layers=1, batch_first=True):
