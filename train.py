@@ -21,6 +21,9 @@ import json
 import math
 from datetime import datetime
 
+# import moxing as mox
+# mox.file.copy_parallel(src_url="s3://focus/nlp/data/", dst_url='./data/')
+#mox.file.copy_parallel(src_url="s3://focus/nlp/nlp_vqa/bert4ms", dst_url='bert4ms/')
 
 class NLLLoss(_Loss):
     def __init__(self, reduction='mean'):
