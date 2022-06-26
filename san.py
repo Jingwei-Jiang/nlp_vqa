@@ -387,6 +387,7 @@ class SANModel(nn.Cell):
         # self.ques_channel = QuesEmbedding(
         #     word_emb_size, output_size=emb_size, num_layers=1, batch_first=False)
         self.ques_channel = BertModel.load('bert-base-uncased')
+        self.ques_channel.set_train(False)
 
         self.san = nn.CellList(
             [Attention(d=emb_size, k=att_ff_size)] * num_att_layers)
