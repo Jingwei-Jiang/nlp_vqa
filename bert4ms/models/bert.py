@@ -1,5 +1,6 @@
 import os
 import logging
+import mindspore
 import mindspore.nn as nn
 import mindspore.ops as ops
 import mindspore.numpy as mnp
@@ -11,6 +12,7 @@ from ..common.activations import activation_map, GELU
 from ..common.cell import PretrainedCell
 from ..common.layers import Dense, Embedding, CrossEntropyLoss
 from ..configs.bert import BertConfig
+expand_dims = ops.ExpandDims()
 
 PRETRAINED_MODEL_ARCHIVE_MAP = {
     "bert-base-uncased": "https://huggingface.co/lvyufeng/bert/resolve/main/bert-base-uncased.ckpt",
@@ -103,7 +105,7 @@ class BertEmbeddings(nn.Cell):
         seq_len = input_ids.shape[1]
         if position_ids is None:
             position_ids = mnp.arange(seq_len)
-            position_ids = position_ids.expand_dims(0).expand_as(input_ids)
+            position_ids = expand_dims(position_ids, 0).expand_as(input_ids)
         if token_type_ids is None:
             token_type_ids = ops.zeros_like(input_ids)
 
@@ -371,22 +373,20 @@ class BertModel(BertPretrainedCell):
         self.num_hidden_layers = self.config.num_hidden_layers
 
     def construct(self, input_ids, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None):
-        x = Tensor([1])
-        y = Tensor([0])
         if attention_mask is None:
-            attention_mask = mnp.where(input_ids, x, y)
+            attention_mask = mnp.where(input_ids, 1, 0)
         if token_type_ids is None:
-            token_type_ids = mnp.where(input_ids, x, y)
+            token_type_ids = mnp.where(input_ids, 1, 0)
 
-        extended_attention_mask = attention_mask.expand_dims(1).expand_dims(2)
+        extended_attention_mask = expand_dims(expand_dims(attention_mask, 1), 2)
         extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
 
         if head_mask is not None:
             if head_mask.ndim == 1:
-                head_mask = head_mask.expand_dims(0).expand_dims(0).expand_dims(-1).expand_dims(-1)
+                head_mask = expand_dims(expand_dims(expand_dims(expand_dims(head_mask, 0),0),-1),-1)
                 head_mask = mnp.broadcast_to(head_mask, (self.num_hidden_layers, -1, -1, -1, -1))
             elif head_mask.ndim == 2:
-                head_mask = head_mask.expand_dims(1).expand_dims(-1).expand_dims(-1)
+                head_mask = expand_dims(expand_dims(expand_dims(head_mask,1),-1),-1)
         else:
             head_mask = [None] * self.num_hidden_layers
 
