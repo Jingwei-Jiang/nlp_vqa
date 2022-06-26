@@ -125,7 +125,7 @@ def run(net, loader, epoch, train=False, prefix=''):
         net.set_train(False)
         answers = []
 
-    tq = tqdm(loader, desc='{} E{:03d}'.format(prefix, epoch), ncols=0, total=math.ceil(len(loader.source) / config.batch_size))
+    tq = tqdm(loader, desc='{} EPOCH{:02d}'.format(prefix, epoch), ncols=0, total=math.ceil(len(loader.source) / config.batch_size))
     for q, a, img in tq:
         if train:
             loss, acc = net(q, a, img)

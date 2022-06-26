@@ -13,24 +13,18 @@ def _weight_variable(shape, factor=0.01):
 
 
 def _conv3x3(in_channel, out_channel, stride=1):
-    weight_shape = (out_channel, in_channel, 3, 3)
-    weight = _weight_variable(weight_shape)
     return nn.Conv2d(in_channel, out_channel,
-                     kernel_size=3, stride=stride, padding=1, pad_mode='same', weight_init=weight)
+                     kernel_size=3, stride=stride, padding=0, pad_mode='same')
 
 
 def _conv1x1(in_channel, out_channel, stride=1):
-    weight_shape = (out_channel, in_channel, 1, 1)
-    weight = _weight_variable(weight_shape)
     return nn.Conv2d(in_channel, out_channel,
-                     kernel_size=1, stride=stride, padding=0, pad_mode='same', weight_init=weight)
+                     kernel_size=1, stride=stride, padding=0, pad_mode='same')
 
 
 def _conv7x7(in_channel, out_channel, stride=1):
-    weight_shape = (out_channel, in_channel, 7, 7)
-    weight = _weight_variable(weight_shape)
     return nn.Conv2d(in_channel, out_channel,
-                     kernel_size=7, stride=stride, padding=3, pad_mode='same', weight_init=weight)
+                     kernel_size=7, stride=stride, padding=0, pad_mode='same')
 
 
 def _bn(channel):
@@ -193,7 +187,7 @@ class ResNet(nn.Cell):
 
         self.conv1 = _conv7x7(3, 64, stride=2)
         self.bn1 = _bn(64)
-        self.relu = ops.ReLU()
+        self.relu = nn.ReLU()
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, pad_mode="same")
 
         self.layer1 = self._make_layer(block,
@@ -269,28 +263,32 @@ class ResNet(nn.Cell):
 
 class ImageEmbedding(nn.Cell):
     def __init__(self, output_size=768):
+        super(ImageEmbedding, self).__init__()
         self.output_size = output_size
         self.in_channels = 3
         self.channels = 64
-        self.dropout = nn.Dropout(0.5)
-        self.cnn = nn.SequentialCell([
-            _conv7x7(self.in_channels, self.channels, stride=2),  # 112x112x64
-            _bn(self.channels),
-            ops.ReLU(),
-            nn.MaxPool2d(kernel_size=3, stride=2, pad_mode="same"),  # 56x56x64
-            _conv3x3(self.channels, self.channels*2), # 56x56x128
+        self.dropout = nn.Dropout(keep_prob=0.5)
+        # 112x112x64
+        # 56x56x64
+        # 56x56x128
+        # 28x28x128
+        # 14x14x256
+        self.simple_cnn = nn.SequentialCell([
+            nn.Conv2d(self.in_channels, self.channels, kernel_size=3, stride=2, padding=0, pad_mode='same'),
+            nn.BatchNorm2d(self.channels, eps=1e-4, momentum=0.9, gamma_init=1, beta_init=0, moving_mean_init=0, moving_var_init=1),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=3, stride=2, pad_mode="same"),
+            nn.Conv2d(self.channels, self.channels * 2, kernel_size=3, stride=1, padding=0, pad_mode='same'),
             nn.BatchNorm2d(self.channels*2),
             nn.ReLU(),
-            nn.MaxPool2d(kernel_size=(2, 2)),  # 28x28x128
-            _conv3x3(self.channels*2, self.channels*4),  # 28x28x256
+            nn.MaxPool2d(kernel_size=2),
+            nn.Conv2d(self.channels * 2, self.channels*4, kernel_size=3, stride=1, padding=0, pad_mode='same'),
             nn.BatchNorm2d(self.channels * 4),
             nn.ReLU(),
-            nn.MaxPool2d(kernel_size=(2, 2)),  # 14x14x256
-            _conv3x3(self.channels*4, self.channels * 8),  # 14x14x512
-            _conv3x3(self.channels * 8, output_size)  # 14x14x768
+            nn.MaxPool2d(kernel_size=2),
+            nn.Conv2d(self.channels*4, output_size, kernel_size=3, stride=1, padding=0, pad_mode='same')
         ])
 
-        self.simple_cnn = nn.SequentialCell(self.cnn)
         #resnet18 7x7x512
         # output_size = 500
         # self.resnet18 = ResNet(BasicBlock,
@@ -354,7 +352,7 @@ class Attention(nn.Cell):
         self.ff_image = nn.Dense(d, k)
         self.ff_ques = nn.Dense(d, k)
         if dropout:
-            self.dropout = nn.Dropout(0.5)
+            self.dropout = nn.Dropout(keep_prob=0.5)
         self.ff_attention = nn.Dense(k, 1)
         self.expand_dims = P.ExpandDims()
 
@@ -394,7 +392,7 @@ class SANModel(nn.Cell):
             [Attention(d=emb_size, k=att_ff_size)] * num_att_layers)
 
         self.mlp = nn.SequentialCell(
-            nn.Dropout(0.5),
+            nn.Dropout(keep_prob=0.5),
             nn.Dense(emb_size, output_size))
 
     def forward(self, questions, images):

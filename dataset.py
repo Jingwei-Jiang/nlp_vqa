@@ -29,6 +29,7 @@ _punctuation_chars = re.escape(r';/[]"{}()=+\_-><@`,?!')
 _punctuation = re.compile(r'([{}])'.format(re.escape(_punctuation_chars)))
 _punctuation_with_a_space = re.compile(r'(?<= )([{0}])|([{0}])(?= )'.format(_punctuation_chars))
 
+
 def process_punctuation(s):
     if _punctuation.search(s) is None:
         return s
@@ -39,13 +40,15 @@ def process_punctuation(s):
     s = _period_strip.sub('', s)
     return s.strip()
 
+
 def prepare_questions(questions_json):
     """ Tokenize and normalize questions from a given question json in the usual VQA format. """
-    #print("ok")
-    questions = [[q['image_id'],q['question']] for q in questions_json['questions']]
+    # print("ok")
+    questions = [[q['image_id'], q['question']] for q in questions_json['questions']]
     for question in questions:
         question[1] = question[1].lower()[:-1]
-        yield [ question[0], question[1]]
+        yield [question[0], question[1]]
+
 
 def prepare_answers(answers_json):
     """ Normalize answers from a given answer json in the usual VQA format. """
@@ -80,51 +83,51 @@ class VQA_dataset:
         self.train = train
         self.val = val
         self.test = test
-        
-        self.answers_path, self.questions_path, self.imgs_path = path_gen( train, val, test )
+
+        self.answers_path, self.questions_path, self.imgs_path = path_gen(train, val, test)
 
         with open(self.questions_path, 'r') as fd:
             self.questions_json = json.load(fd)
         with open(self.answers_path, 'r') as fd:
             self.answers_json = json.load(fd)
-       # print("ok")
+        # print("ok")
         # q and a
-        #self.ans_to_idx, _ = ans_vocab_gen()
+        # self.ans_to_idx, _ = ans_vocab_gen()
         self.questions = list(prepare_questions(self.questions_json))
         self.answers = list(prepare_answers(self.answers_json))
         self.tokenizer = BertTokenizer.load('bert-base-uncased')
         self.ans_to_idx, _ = ans_vocab_gen()
-        
+
         self.ans_vocab_len = len(self.ans_to_idx)
         for i, item in enumerate(self.answers):
             ans_encoding = np.zeros(self.ans_vocab_len)
             for ans in item:
                 if ans in self.ans_to_idx.keys():
                     ans_encoding[self.ans_to_idx[ans]] += 1.0
-            self.answers[i] = ans_encoding/sum(ans_encoding) * 10
+            self.answers[i] = ans_encoding.argmax()
 
     def img_path_gen(self, item):
         split = 'train' if self.train else 'val'
-        img_path = self.imgs_path+'COCO_'+ split + '2014_' + str(item).zfill(12) + '.jpg'
+        img_path = self.imgs_path + 'COCO_' + split + '2014_' + str(item).zfill(12) + '.jpg'
         return img_path
-    
+
     def __getitem__(self, idx):
-        #print(idx)
+        # print(idx)
         q = self.questions[idx]
         a = self.answers[idx]
-        #ans_idx = [ self.ans_to_idx[ans] for ans in a]
+        # ans_idx = [ self.ans_to_idx[ans] for ans in a]
         path_img = self.img_path_gen(q[0])
         img = Image.open(path_img).convert('RGB')
         img = np.array(img)
         question_token = self.tokenizer.encode(q[1], add_special_tokens=True)
         token_array = np.array(question_token)
-        token_array = np.pad(token_array,(0,128 - len(token_array)))
-        #question_token = Tensor([token_array]).astype(mindspore.float64)
+        token_array = np.pad(token_array, (0, 128 - len(token_array)))
+        # question_token = Tensor([token_array]).astype(mindspore.float64)
 
         return token_array, a, np.array(img)
-        #return  question_token, a, img
-        #return img
-    
+        # return  question_token, a, img
+        # return img
+
     def __len__(self):
         return len(self.questions)
 

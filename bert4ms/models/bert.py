@@ -4,6 +4,7 @@ import mindspore.nn as nn
 import mindspore.ops as ops
 import mindspore.numpy as mnp
 import mindspore.common.dtype as mstype
+from mindspore import Tensor
 from mindspore import Parameter
 from mindspore.common.initializer import initializer
 from ..common.activations import activation_map, GELU
@@ -47,6 +48,7 @@ PYTORCH_PRETRAINED_MODEL_ARCHIVE_LIST = [
     "sentence-transformers/all-MiniLM-L6-v2"
 ]
 
+
 def torch_to_mindspore(pth_file):
     try:
         import torch
@@ -75,7 +77,7 @@ def torch_to_mindspore(pth_file):
             k = k.replace('self', 'self_attn')
         ms_ckpt.append({'name': k, 'data': Tensor(v.numpy())})
 
-    ms_ckpt_path = pth_file.replace('.bin','.ckpt')
+    ms_ckpt_path = pth_file.replace('.bin', '.ckpt')
     if not os.path.exists(ms_ckpt_path):
         try:
             save_checkpoint(ms_ckpt, ms_ckpt_path)
@@ -84,9 +86,11 @@ def torch_to_mindspore(pth_file):
 
     return ms_ckpt_path
 
+
 class BertEmbeddings(nn.Cell):
     """Embeddings for BERT, include word, position and token_type
     """
+
     def __init__(self, config):
         super().__init__()
         self.word_embeddings = Embedding(config.vocab_size, config.hidden_size)
@@ -111,9 +115,11 @@ class BertEmbeddings(nn.Cell):
         embeddings = self.dropout(embeddings)
         return embeddings
 
+
 class BertSelfAttention(nn.Cell):
     """Self attention layer for BERT
     """
+
     def __init__(self, config):
         super(BertSelfAttention, self).__init__()
         if config.hidden_size % config.num_attention_heads != 0:
@@ -121,7 +127,7 @@ class BertSelfAttention(nn.Cell):
                 "The hidden size (%d) is not a multiple of the number of attention "
                 "heads (%d)" % (config.hidden_size, config.num_attention_heads))
         self.output_attentions = config.output_attentions
-        
+
         self.num_attention_heads = config.num_attention_heads
         self.attention_head_size = int(config.hidden_size / config.num_attention_heads)
         self.all_head_size = self.num_attention_heads * self.attention_head_size
@@ -170,6 +176,7 @@ class BertSelfAttention(nn.Cell):
         outputs = (context_layer, attention_probs) if self.output_attentions else (context_layer,)
         return outputs
 
+
 class BertSelfOutput(nn.Cell):
     def __init__(self, config):
         super(BertSelfOutput, self).__init__()
@@ -183,6 +190,7 @@ class BertSelfOutput(nn.Cell):
         hidden_states = self.layer_norm(hidden_states + input_tensor)
         return hidden_states
 
+
 class BertAttention(nn.Cell):
     def __init__(self, config):
         super(BertAttention, self).__init__()
@@ -195,6 +203,7 @@ class BertAttention(nn.Cell):
         outputs = (attention_output,) + self_outputs[1:]
         return outputs
 
+
 class BertIntermediate(nn.Cell):
     def __init__(self, config):
         super(BertIntermediate, self).__init__()
@@ -205,6 +214,7 @@ class BertIntermediate(nn.Cell):
         hidden_states = self.dense(hidden_states)
         hidden_states = self.intermediate_act_fn(hidden_states)
         return hidden_states
+
 
 class BertOutput(nn.Cell):
     def __init__(self, config):
@@ -235,6 +245,7 @@ class BertLayer(nn.Cell):
         outputs = (layer_output,) + attention_outputs[1:]
         return outputs
 
+
 class BertEncoder(nn.Cell):
     def __init__(self, config):
         super(BertEncoder, self).__init__()
@@ -257,13 +268,14 @@ class BertEncoder(nn.Cell):
 
         if self.output_hidden_states:
             all_hidden_states += (hidden_states,)
-        
+
         outputs = (hidden_states,)
         if self.output_hidden_states:
             outputs += (all_hidden_states,)
         if self.output_attentions:
             outputs += (all_attentions,)
         return outputs
+
 
 class BertPooler(nn.Cell):
     def __init__(self, config):
@@ -277,6 +289,7 @@ class BertPooler(nn.Cell):
         pooled_output = self.dense(first_token_tensor)
         return pooled_output
 
+
 class BertPredictionHeadTransform(nn.Cell):
     def __init__(self, config):
         super(BertPredictionHeadTransform, self).__init__()
@@ -289,6 +302,7 @@ class BertPredictionHeadTransform(nn.Cell):
         hidden_states = self.transform_act_fn(hidden_states)
         hidden_states = self.layer_norm(hidden_states)
         return hidden_states
+
 
 class BertLMPredictionHead(nn.Cell):
     def __init__(self, config):
@@ -305,6 +319,7 @@ class BertLMPredictionHead(nn.Cell):
         hidden_states = self.transform(hidden_states)
         hidden_states = self.decoder(hidden_states) + self.bias
         return hidden_states
+
 
 class BertOnlyMLMHead(nn.Cell):
     def __init__(self, config):
@@ -337,14 +352,17 @@ class BertPreTrainingHeads(nn.Cell):
         seq_relationship_score = self.seq_relationship(pooled_output)
         return prediction_scores, seq_relationship_score
 
+
 class BertPretrainedCell(PretrainedCell):
     pretrained_model_archive = PRETRAINED_MODEL_ARCHIVE_MAP
     pytorch_pretrained_model_archive_list = PYTORCH_PRETRAINED_MODEL_ARCHIVE_LIST
     config_class = BertConfig
     convert_torch_to_mindspore = torch_to_mindspore
 
+
 class BertModel(BertPretrainedCell):
     """"""
+
     def __init__(self, config):
         super().__init__(config)
         self.embeddings = BertEmbeddings(config)
@@ -378,8 +396,10 @@ class BertModel(BertPretrainedCell):
                                        head_mask=head_mask)
         sequence_output = encoder_outputs[0]
         pooled_output = self.pooler(sequence_output)
-        outputs = (sequence_output, pooled_output,) + encoder_outputs[1:]  # add hidden_states and attentions if they are here
+        outputs = (sequence_output, pooled_output,) + encoder_outputs[
+                                                      1:]  # add hidden_states and attentions if they are here
         return outputs  # sequence_output, pooled_output, (hidden_states), (attentions)
+
 
 class BertForPretraining(BertPretrainedCell):
     def __init__(self, config, *args, **kwargs):
@@ -388,7 +408,7 @@ class BertForPretraining(BertPretrainedCell):
         self.cls = BertPreTrainingHeads(config)
 
         self.cls.predictions.decoder.weight = self.bert.embeddings.word_embeddings.embedding_table
-    
+
         self.loss_fct = CrossEntropyLoss(ignore_index=-1)
 
     def construct(self, input_ids, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None,
@@ -407,11 +427,13 @@ class BertForPretraining(BertPretrainedCell):
         outputs = (prediction_scores, seq_relationship_score,) + outputs[2:]
 
         if masked_lm_labels is not None and next_sentence_label is not None:
-            masked_lm_loss = self.loss_fct(prediction_scores.view(-1, self.config.vocab_size), masked_lm_labels.view(-1))
+            masked_lm_loss = self.loss_fct(prediction_scores.view(-1, self.config.vocab_size),
+                                           masked_lm_labels.view(-1))
             next_sentence_loss = self.loss_fct(seq_relationship_score.view(-1, 2), next_sentence_label.view(-1))
             total_loss = masked_lm_loss + next_sentence_loss
             outputs = (total_loss,) + outputs
         return outputs
+
 
 class BertForMaskedLM(BertPretrainedCell):
     def __init__(self, config, *args, **kwargs):
@@ -428,7 +450,7 @@ class BertForMaskedLM(BertPretrainedCell):
                             token_type_ids=token_type_ids,
                             position_ids=position_ids,
                             head_mask=head_mask)
-        
+
         sequence_output = outputs[0]
         prediction_scores = self.cls(sequence_output)
 
@@ -440,18 +462,19 @@ class BertForMaskedLM(BertPretrainedCell):
 
         return outputs
 
+
 class BertForNextSentencePrediction(BertPretrainedCell):
     def __init__(self, config, *args, **kwargs):
         super().__init__(config, *args, **kwargs)
         self.bert = BertModel(config)
         self.cls = BertOnlyNSPHead(config)
-    
+
     def construct(self, input_ids, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None,
                   next_sentence_label=None):
         outputs = self.bert(input_ids,
                             attention_mask=attention_mask,
                             token_type_ids=token_type_ids,
-                            position_ids=position_ids, 
+                            position_ids=position_ids,
                             head_mask=head_mask)
 
         pooled_output = outputs[1]
@@ -466,12 +489,13 @@ class BertForNextSentencePrediction(BertPretrainedCell):
 
         return outputs  # (next_sentence_loss), seq_relationship_score, (hidden_states), (attentions)
 
+
 class BertForSequenceClassification(BertPretrainedCell):
     def __init__(self, config, *args, **kwargs):
         super().__init__(config, *args, **kwargs)
         self.num_labels = config.num_labels
         self.bert = BertModel(config)
-        self.dropout = nn.Dropout(1-config.hidden_dropout_prob)
+        self.dropout = nn.Dropout(1 - config.hidden_dropout_prob)
         self.classifier = Dense(config.hidden_size, config.num_labels)
 
     def construct(self, input_ids, attention_mask=None, token_type_ids=None,
@@ -479,7 +503,7 @@ class BertForSequenceClassification(BertPretrainedCell):
         outputs = self.bert(input_ids,
                             attention_mask=attention_mask,
                             token_type_ids=token_type_ids,
-                            position_ids=position_ids, 
+                            position_ids=position_ids,
                             head_mask=head_mask)
 
         pooled_output = outputs[1]
@@ -501,13 +525,13 @@ class BertForSequenceClassification(BertPretrainedCell):
 
         return outputs  # (loss), logits, (hidden_states), (attentions)
 
+
 class BertForMultipleChoice(BertPretrainedCell):
     def __init__(self, config, *args, **kwargs):
         super().__init__(config, *args, **kwargs)
         self.bert = BertModel(config)
-        self.dropout = nn.Dropout(1-config.hidden_dropout_prob)
+        self.dropout = nn.Dropout(1 - config.hidden_dropout_prob)
         self.classifier = Dense(config.hidden_size, 1)
-
 
     def construct(self, input_ids, attention_mask=None, token_type_ids=None,
                   position_ids=None, head_mask=None, labels=None):
@@ -539,21 +563,22 @@ class BertForMultipleChoice(BertPretrainedCell):
 
         return outputs  # (loss), reshaped_logits, (hidden_states), (attentions)
 
+
 class BertForTokenClassification(BertPretrainedCell):
     def __init__(self, config, *args, **kwargs):
         super().__init__(config, *args, **kwargs)
         self.num_labels = config.num_labels
         self.bert = BertModel(config)
-        self.dropout = nn.Dropout(1-config.hidden_dropout_prob)
+        self.dropout = nn.Dropout(1 - config.hidden_dropout_prob)
         self.classifier = Dense(config.hidden_size, config.num_labels)
-    
+
     def construct(self, input_ids, attention_mask=None, token_type_ids=None,
                   position_ids=None, head_mask=None, labels=None):
 
         outputs = self.bert(input_ids,
                             attention_mask=attention_mask,
                             token_type_ids=token_type_ids,
-                            position_ids=position_ids, 
+                            position_ids=position_ids,
                             head_mask=head_mask)
 
         sequence_output = outputs[0]
@@ -576,20 +601,20 @@ class BertForTokenClassification(BertPretrainedCell):
 
         return outputs  # (loss), scores, (hidden_states), (attentions)
 
+
 class BertForQuestionAnswering(BertPretrainedCell):
     def __init__(self, config, *args, **kwargs):
         super().__init__(config, *args, **kwargs)
         self.num_labels = config.num_labels
         self.bert = BertModel(config)
         self.qa_outputs = Dense(config.hidden_size, config.num_labels)
-    
+
     def construct(self, input_ids, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None,
                   start_positions=None, end_positions=None):
-
         outputs = self.bert(input_ids,
                             attention_mask=attention_mask,
                             token_type_ids=token_type_ids,
-                            position_ids=position_ids, 
+                            position_ids=position_ids,
                             head_mask=head_mask)
 
         sequence_output = outputs[0]
