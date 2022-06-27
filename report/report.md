@@ -152,9 +152,9 @@ answer{
 
 完成后加载为`DataLoader`格式，调用相关函数即可，这里可以灵活设置`batch_size`与图片的增强模式（在`config.py`中完成定义即可）。
 
-最终每一个`batch`的数据如下所示：
+最终每一个`batch`的数据如下所示：问题编码为128维，图片为224*224维。
 
-
+![dataloader](D:\Grade3\大三下\nlp\pro\report\dataloader.png)
 
 #### 2.2 img特征提取
 
