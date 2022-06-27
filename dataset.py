@@ -101,7 +101,7 @@ class VQA_dataset:
             for ans in item:
                 if ans in self.ans_to_idx.keys():
                     ans_encoding[self.ans_to_idx[ans]] += 1.0
-            self.answers[i] = ans_encoding / sum(ans_encoding) * 10
+            self.answers[i] = ans_encoding / sum(ans_encoding)
 
     def img_path_gen(self, item):
         split = 'train' if self.train else 'val'
