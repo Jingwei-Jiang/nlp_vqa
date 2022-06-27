@@ -68,7 +68,21 @@
 
 ## 2 Technical details
 
-​	VQA整体pipeline
+### 2.0 环境设置
+
+由于`Modelarts`不能直接同步`obs`内的文件，因此需要先同步文件。此外，还需要通过`mindspore.context`设置训练芯片和模式。
+
+```python
+import moxing as mox
+from mindspore import context
+mox.file.copy_parallel(src_url="s3://focus/nlp/data/", dst_url='../data/')
+mox.file.copy_parallel(src_url="s3://focus/nlp/nlp_vqa/", dst_url='.')
+context.set_context(mode=context.PYNATIVE_MODE, device_target='Ascend')
+```
+
+
+
+VQA整体pipeline
 
 ### 2.1 DataLoader
 
@@ -160,7 +174,59 @@ answer{
 
 <img src="C:\Users\蒋景伟\AppData\Roaming\Typora\typora-user-images\image-20220627000844700.png" alt="image-20220627000844700" style="zoom:50%;" />
 
- 介绍使用的网络等
+在大多数的VQA模型中，都是选择提前处理好的图像特征作为输入。我们尝试手动搭建卷积网络，直接将图片输入网络进行特征提取。（此处可列为创新点）首先在`dataest.py`中对图像进行预处理，保证图像的大小为`224x224`。
+
+```python
+def trans_gen( train=False, val=False, test=False ):
+    mode = 'train' if train else 'val'
+    transforms_dict = {
+        'train':[
+            decode,
+            py_trans.Resize(size=(224, 224)),
+            py_trans.RandomHorizontalFlip(0.2),
+            py_trans.ToTensor(),
+            py_trans.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ],
+        'val':[
+            decode,
+            py_trans.Resize(size=(224, 224)),
+            py_trans.ToTensor(),
+            py_trans.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ]}
+
+    return Compose(transforms_dict[mode])
+```
+
+在`san.py`中，使用`nn.SequentialCell`搭建特征提取网络`simple_cnn`。具体网络如下，其输出大小为`batch_sizex14x14x768`
+
+```python
+self.simple_cnn = nn.SequentialCell([
+            nn.Conv2d(self.in_channels, self.channels, kernel_size=3, stride=2, padding=0, pad_mode='same'),
+            nn.BatchNorm2d(self.channels, eps=1e-4, momentum=0.9, gamma_init=1, beta_init=0, moving_mean_init=0, moving_var_init=1),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=3, stride=2, pad_mode="same"),
+            nn.Conv2d(self.channels, self.channels * 2, kernel_size=3, stride=1, padding=0, pad_mode='same'),
+            nn.BatchNorm2d(self.channels*2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2,stride=2),
+            nn.Conv2d(self.channels * 2, self.channels*4, kernel_size=3, stride=1, padding=0, pad_mode='same'),
+            nn.BatchNorm2d(self.channels * 4),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2,stride=2),
+            nn.Conv2d(self.channels*4, output_size, kernel_size=3, stride=1, padding=0, pad_mode='same')
+        ])
+```
+
+为了方便后续的特征融合，在模型的`construct`中统一输出大小为`batch_sizex196x768`
+
+```python
+def construct(self, x):
+    x = self.simple_cnn(x)
+    N = x.shape[0]
+    return x.reshape((N, 196, self.output_size))
+```
+
+
 
 ### 2.3 text特征提取
 
@@ -280,6 +346,75 @@ $$
 
 
 
+
+### 2.5 模型训练及验证
+
+由于VQA的输入有`question`和`img`，而mindspore自带的`WithLossCell`仅支持一个输入，因此需要自定义。
+
+```python
+class WithLossCell(nn.Cell):
+    def __init__(self, model):
+        super(WithLossCell, self).__init__(auto_prefix=False)
+        self.loss = nn.SoftmaxCrossEntropyWithLogits()
+        self.net = model
+
+    def construct(self, q, a, img):
+        out = self.net(q, img)
+        loss = self.loss(out, a)
+        return loss
+```
+
+训练模型的定义如下。其中，`TrainOneStepCell`是`mindspore`实现的训练网络包装方法
+
+```python
+#定义网络
+model = san.SANModel()
+#定义优化器
+opt = nn.Adam(params=model.trainable_params())
+#定义带Loss的网络
+net_with_loss = WithLossCell(model)
+#包装训练网络
+train_net = TrainOneStepCell(net_with_loss, opt)
+#设置训练模式
+train_net.set_train(True)
+```
+
+对于模型的验证，由于`Tensor`的操作不太方便，且`nn.Cell`的`construct`对非`Tensor`的输出格式不是很友好，因此在`WithAccuracy`中我们仅将模型的预测结果做`argmax`操作后便输出，在后续的操作中进一步计算准确率并输出预测结果。
+
+```python
+class WithAccuracy(nn.Cell):
+    def __init__(self, model):
+        super(WithAccuracy, self).__init__(auto_prefix=False)
+        self.net = model
+
+    def construct(self, q, a, img):
+        out = self.net(q, img)
+        out = ops.Argmax(output_type=mindspore.int32)(out)
+        return out, a
+```
+
+验证网路定义如下。
+
+```python
+#model即为训练网络中同一个model
+eval_net = WithAccuracy(model)
+#设置验证模式
+eval_net.set_train(False)
+```
+
+准确率具体计算代码如下(一个`batch`)
+
+```python
+out, a = eval_net(q, a, img)
+predicted = out.asnumpy()
+ans = a.asnumpy()
+batch_size = ans.shape[0]
+acc = 0
+for i in range(batch_size):
+	if ans[i,predicted[i]]!=0:
+        acc += 1
+accuracy = acc / batch_size
+```
 
 ### 3 Experiment Results
 
