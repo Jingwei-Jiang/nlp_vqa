@@ -80,10 +80,6 @@ mox.file.copy_parallel(src_url="s3://focus/nlp/nlp_vqa/", dst_url='.')
 context.set_context(mode=context.PYNATIVE_MODE, device_target='Ascend')
 ```
 
-
-
-VQA整体pipeline
-
 ### 2.1 DataLoader
 
 #### 2.1.1 数据集简介
@@ -171,8 +167,6 @@ answer{
 ![dataloader](D:\Grade3\大三下\nlp\pro\report\dataloader.png)
 
 ### 2.2 img特征提取
-
-<img src="C:\Users\蒋景伟\AppData\Roaming\Typora\typora-user-images\image-20220627000844700.png" alt="image-20220627000844700" style="zoom:50%;" />
 
 在大多数的VQA模型中，都是选择提前处理好的图像特征作为输入。我们尝试手动搭建卷积网络，直接将图片输入网络进行特征提取。（此处可列为创新点）首先在`dataest.py`中对图像进行预处理，保证图像的大小为`224x224`。
 
