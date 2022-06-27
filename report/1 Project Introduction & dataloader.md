@@ -82,4 +82,4 @@ answer{
 
 处理结果：
 
-![dataloader](D:\Grade3\大三下\nlp\pro\report\dataloader.png)
+![dataloader](dataloader.png)
