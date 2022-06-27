@@ -82,6 +82,8 @@ class SANModel(nn.Cell):
         self.ques_channel = BertModel.load('bert-base-uncased')
         self.ques_channel.set_train(False)
 
+        self.softmax = ops.Softmax()
+
         self.san = nn.CellList(
             [Attention(d=emb_size, k=att_ff_size)] * num_att_layers)
 
@@ -102,4 +104,4 @@ class SANModel(nn.Cell):
         for att_layer in self.san:
             u = att_layer(vi, u)
         output = self.mlp(u)
-        return output
+        return self.softmax(output)
