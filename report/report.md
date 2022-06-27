@@ -42,19 +42,19 @@
 
 <div STYLE="page-break-after: always;"></div>
 
-### 1 Project Introduction
+## 1 Project Introduction
 
-#### 1.1 选题
+### 1.1 选题
 
 + Visual Question Answering
 
-#### 1.2 工作简介
+### 1.2 工作简介
 
 + 以一张图片和一个关于图片内容的自然语言形式的问题作为输入，要求输出正确答案
 + 在数据集`VQAv2`上进行训练与测试
 + 属于一种多标签分类的问题，计算损失的时候采用多标签损失。
 
-#### 1.3 开发环境
+### 1.3 开发环境
 
 + 开发工具：`ModelArts Ascend Notebook`环境，选用`Ascend910`芯片作为训练芯片
 
@@ -66,13 +66,13 @@
 
   `python3.7.5`与可运行`Mindspore1.3.0`的开发环境
 
-### 2 Technical details
+## 2 Technical details
 
 ​	VQA整体pipeline
 
-#### 2.1 DataLoader
+### 2.1 DataLoader
 
-##### 2.1.1 数据集简介
+#### 2.1.1 数据集简介
 
 使用`VQAv2`数据集，分为`image`，`question`和`annotation`三个大的数据集，官网数据量如下：
 
@@ -127,7 +127,7 @@ answer{
 }
 ```
 
-##### 2.1.2 数据预处理
+#### 2.1.2 数据预处理
 
 ###### 1 数据对齐
 
@@ -137,7 +137,7 @@ answer{
 
 前面提到，一张图片对应5个问题左右，需要将图片与问题对齐，剔除没有一一对应关系的问题或图片，该部分代码在`match_align/match.py`中，运行后发现所有训练集中有部分问题没有对应图片，因此去除该部分的问题，重新整理后写回`JSON`文件。
 
-##### 2.1.3 数据集加载
+#### 2.1.3 数据集加载
 
 由任务可知，我们需要把数据集加载成`img`, `question`, `answers`的形式，数据类型与预处理如下：
 
@@ -156,17 +156,76 @@ answer{
 
 ![dataloader](D:\Grade3\大三下\nlp\pro\report\dataloader.png)
 
-#### 2.2 img特征提取
+### 2.2 img特征提取
 
 <img src="C:\Users\蒋景伟\AppData\Roaming\Typora\typora-user-images\image-20220627000844700.png" alt="image-20220627000844700" style="zoom:50%;" />
 
  介绍使用的网络等
 
-#### 2.3 text特征提取
+### 2.3 text特征提取
 
 ​	
 
-#### 2.4 特征融合与预测网络
+### 2.4 特征融合与预测网络
+
+#### 2.4.1 网络功能概述
+
+在具体网络的搭建中，我们使用了一种名为 Stacked Attention Network [1] 的网络，它使用多层 Attention 识别图像中不同区域的敏感度。以如下的问题和图片为例。
+
+- 问题：What are sitting in the basket on a bicycle?
+
+- 图片：
+
+  <img src="D:\Grade3\大三下\nlp\pro\report\2_4_1_1.png" alt="img2_4_1_1" style="zoom:50%;" />
+
+经过两次Attention层后，Attention层成功预测出了兴趣区域[1]：
+
+<img src="D:\Grade3\大三下\nlp\pro\report\2_4_1_2.png" alt="img2_4_1_2" style="zoom:50%;" />
+
+接下来，我们对具体的算法实现和背后的原理做简要分析。
+
+#### 2.4.2 网络结构
+
+在前面的部分中，我们使用了CNN和Bert分别对图像和问题进行了编码，得到了以下数据：
+$$
+v_I \in R^{d \times m} \\
+v_Q \in R^d
+$$
+其中，$v_I$ 为编码后的图像矩阵，$v_Q$ 为编码后的问题句向量，d为表示维度，m是图像中区域的个数（利用CNN）。
+
+在我们的Attention层中，最核心的问题是找到不同区域的权重，或者说，为兴趣区域的概率。为此，我们进行如下计算：
+$$
+h_A = \text{tanh}(W_I v_I \oplus W_Q v_Q) \\
+p_I = \text{softmax}(W_p h_A) \\
+\text{where:} \\
+W_I, W_Q \in R^{k \times d}, W_P \in R^{1 \times k}
+$$
+我们首先让$v_I$ $v_Q$ 分别通过全连接层，使得它们的维度变为 $R^{k \times m}$ 和 $R^k$. 这里，$\oplus$ 操作代表把向量加到矩阵的每一列上。回顾图像矩阵的每一列代表每个兴趣区域的知识，这里的操作实际上是把句子向量与每个兴趣区域做融合。由此再将 $h_A$ 通过全连接层和 Softmax，就得到了图像中每个区域在特定句子中能成为兴趣区域的可能性，也称为我们的 **Attention Distribution**.
+
+有了 Attention Distribution 后，我们利用它计算每个区域的权重和 $\hat{v_I} \in R^d$：
+$$
+\hat{v_I} = \sum_i p_i v_i
+$$
+接着，把这个向量与句向量相加，得到整合后的查询向量  $u \in R^d$。
+$$
+u = \hat{v_I} + v_Q
+$$
+以上就是单层Attention的思路。传统方法仅仅是将整体图片向量与问题向量合并，相较于传统方法，Attention方法得到的查询向量 $u$ 更具有信息表示性，因为与问题更相关的区域得到了更高的权重。不过，对于复杂问题，单层 Attention 的表示性并不强，所以我们可以使用多层 Attention，即将查询向量作为新的问题向量，不断输入Attention层进行迭代：
+$$
+h_A^k = \text{tanh}(W_I^k v_I \oplus W_Q^k u^{k-1}) \\
+p_I = \text{softmax}(W_p^k h_A^k) \\
+\hat{v_I}^k = \sum_i p_i^k v_i \\
+u^k = \hat{v_I}^k + u^{k-1}
+$$
+经过K次Attention迭代后，我们使用全连接层和Softmax推理答案：
+$$
+p_{\text{ans}} = \text{softmax}(W_u u^K)
+$$
+整体网络结构图如下[1]：
+
+![img_2_4_2](D:\Grade3\大三下\nlp\pro\report\2_4_2.png)
+
+
 
 
 
@@ -191,4 +250,6 @@ answer{
 ### 4 References
 
 [1] Antol S ,  Agrawal A ,  Lu J , et al. VQA: Visual Question Answering[J]. International Journal of Computer Vision, 2015, 123(1):4-31.
+
+[2] Yang, Zichao, et al. "Stacked attention networks for image question answering." *Proceedings of the IEEE conference on computer vision and pattern recognition*. 2016.
 
