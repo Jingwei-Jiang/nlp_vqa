@@ -431,6 +431,42 @@ accuracy = acc / batch_size
 ```
 
 ---
+
+# Experiment Results
+
+3.1 实验结果
+
+参数：`batch_size`：4，`learning rate`： 2e-3
+
+![image-20220628113458436](train_begin.png)
+
+---
+
+# Experiment Results
+
+Finetune一个epoch：
+
+![image-20220628111647296](val.png)
+
+Overall Performance：28.13
+
+---
+
+# Conclusion
+
+1. 问题
+
+由于算力有限，我们每个人能训练的`epoch`有限，但是训练两三个`epoch`后结果提升很少，导致最终的结果比较一般。
+
+1. 分析
+
+问题原因分析如下：
+
+1. 算力有限，无法将模型训练至收敛
+2. `backbone`特征提取网络是自己搭建的`CNN`模型，没有预训练，在训练过程中比较难以收敛，导致在特征提取上出了问题
+3. 替换了原有网络的子部件，融合上可能有一定问题
+
+---
 layout: center
 class: text-center
 ---
