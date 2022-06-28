@@ -67,32 +67,6 @@ h1 {
 </style>
 
 ---
-
-# Image Embedding
-
-直接输入图片（3x224x224）到搭建的卷积网络，输出特征（196x768），而非直接使用提取好的特征
-
-```python
-self.simple_cnn = nn.SequentialCell([
-            nn.Conv2d(self.in_channels, self.channels, kernel_size=3, stride=2, padding=0, pad_mode='same'),
-            nn.BatchNorm2d(
-                self.channels, eps=1e-4, momentum=0.9, gamma_init=1, beta_init=0, 
-                moving_mean_init=0, moving_var_init=1),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=3, stride=2, pad_mode="same"),
-            nn.Conv2d(self.channels, self.channels * 2, kernel_size=3, stride=1, padding=0, pad_mode='same'),
-            nn.BatchNorm2d(self.channels*2),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2,stride=2),
-            nn.Conv2d(self.channels * 2, self.channels*4, kernel_size=3, stride=1, padding=0, pad_mode='same'),
-            nn.BatchNorm2d(self.channels * 4),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2,stride=2),
-            nn.Conv2d(self.channels*4, output_size, kernel_size=3, stride=1, padding=0, pad_mode='same')
-        ])
-```
-
----
 layout: two-cols
 ---
 
@@ -160,6 +134,32 @@ answer{
 3. Answers：预处理，进行词形还原，大小写转换等，自己构造词汇表进行one-hot编码
 
 <img src="/dataloader.png" style="width:400px;height:200px;position:absolute; left: 500px; top: 75px"/>
+
+---
+
+# Image Embedding
+
+直接输入图片（3x224x224）到搭建的卷积网络，输出特征（196x768），而非直接使用提取好的特征
+
+```python
+self.simple_cnn = nn.SequentialCell([
+            nn.Conv2d(self.in_channels, self.channels, kernel_size=3, stride=2, padding=0, pad_mode='same'),
+            nn.BatchNorm2d(
+                self.channels, eps=1e-4, momentum=0.9, gamma_init=1, beta_init=0, 
+                moving_mean_init=0, moving_var_init=1),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=3, stride=2, pad_mode="same"),
+            nn.Conv2d(self.channels, self.channels * 2, kernel_size=3, stride=1, padding=0, pad_mode='same'),
+            nn.BatchNorm2d(self.channels*2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2,stride=2),
+            nn.Conv2d(self.channels * 2, self.channels*4, kernel_size=3, stride=1, padding=0, pad_mode='same'),
+            nn.BatchNorm2d(self.channels * 4),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2,stride=2),
+            nn.Conv2d(self.channels*4, output_size, kernel_size=3, stride=1, padding=0, pad_mode='same')
+        ])
+```
 
 ---
 layout: two-cols
