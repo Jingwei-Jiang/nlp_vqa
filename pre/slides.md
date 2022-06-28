@@ -67,6 +67,32 @@ h1 {
 </style>
 
 ---
+
+# Image Embedding
+
+直接输入图片（3x224x224）到搭建的卷积网络，输出特征（196x768），而非直接使用提取好的特征
+
+```python
+self.simple_cnn = nn.SequentialCell([
+            nn.Conv2d(self.in_channels, self.channels, kernel_size=3, stride=2, padding=0, pad_mode='same'),
+            nn.BatchNorm2d(
+                self.channels, eps=1e-4, momentum=0.9, gamma_init=1, beta_init=0, 
+                moving_mean_init=0, moving_var_init=1),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=3, stride=2, pad_mode="same"),
+            nn.Conv2d(self.channels, self.channels * 2, kernel_size=3, stride=1, padding=0, pad_mode='same'),
+            nn.BatchNorm2d(self.channels*2),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2,stride=2),
+            nn.Conv2d(self.channels * 2, self.channels*4, kernel_size=3, stride=1, padding=0, pad_mode='same'),
+            nn.BatchNorm2d(self.channels * 4),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2,stride=2),
+            nn.Conv2d(self.channels*4, output_size, kernel_size=3, stride=1, padding=0, pad_mode='same')
+        ])
+```
+
+---
 layout: two-cols
 ---
 
@@ -225,11 +251,11 @@ class BertModel(BertPretrainCell):
 </style>
 
 ---
-layout: center
-class: text-center
+layout: two-cols
 ---
 
-# Thanks
+::default::
+
 # Stacked Attention Network
 
 ## 模型功能
@@ -239,7 +265,9 @@ class: text-center
 - 输入问题：What are sitting in the basket on a bicycle?
 - 输入图片：
 
-![2_4_1_1](2_4_1_1.png)
+<img src="/2_4_1_1.png" style="width:150px;height:150px;position:absolute; left: 250px; top: 60%"/>
+
+::right::
 
 - 经过两层 Attention:
 
@@ -249,7 +277,13 @@ class: text-center
 
 - 整体模型结构：
 
-  ![2_4_2](2_4_2.png)
+<img src="/2_4_2.png" style="width:300px;height:150px;position:absolute; left: 650px; top: 65%"/>
+
+---
+layout: two-cols
+---
+
+::default::
 
 ## Attention Distribution
 
@@ -267,6 +301,9 @@ class: text-center
   h_A = \text{tanh}(W_I v_I \oplus W_Q v_Q) \\
   p_I = \text{softmax}(W_p h_A)
   $$
+
+::right::
+
   我们首先让$v_I$ $v_Q$ 分别通过全连接层，使得它们的维度变为 $R^{k \times m}$ 和 $R^k$. 这里，$\oplus$ 操作代表把向量加到矩阵的每一列上。图像矩阵的每一列代表每个兴趣区域，因此这里的操作实际上就是把句子向量与每个兴趣区域做融合。由此再将 $h_A$ 通过全连接层和 Softmax，就得到了图像中每个区域在特定句子中能成为兴趣区域的可能性，也就是我们的 **Attention Distribution**.
 
 - 有了 Attention Distribution 后，我们利用它计算每个区域的权重和 $\hat{v_I} \in R^d$：
@@ -279,6 +316,10 @@ class: text-center
   $$
 
 - 以上就是单层Attention的思路。
+
+---
+
+## Attention Distribution
 
 - 单层 Attention 的表示性并不强，所以我们可以使用多层 Attention，即将查询向量作为新的问题向量，不断输入Attention层进行迭代：
   $$
@@ -296,3 +337,102 @@ class: text-center
 
 - 传统方法仅仅是将整体图片向量与问题向量合并，对区域信息不敏感。
 - 相较于传统方法，Attention方法得到的查询向量 $u$ 更具有信息表示性，因为与问题更相关的区域得到了更高的权重。
+
+---
+layout: two-cols
+---
+
+# 模型训练及验证
+
+<br>
+<br>
+<br>
+
+1. 为了支持多个输入(`question`和`img`)，自定义`WithLossCell`
+
+```python
+class WithLossCell(nn.Cell):
+    def __init__(self, model):
+        super(WithLossCell, self).__init__(
+            auto_prefix=False)
+        self.loss = nn.SoftmaxCrossEntropyWithLogits()
+        self.net = model
+
+    def construct(self, q, a, img):
+        out = self.net(q, img)
+        loss = self.loss(out, a)
+        return loss
+```
+
+::right::
+\
+\
+\
+\
+2. 定义训练网络
+
+```python
+#定义网络
+model = san.SANModel()
+#定义优化器
+opt = nn.Adam(params=model.trainable_params())
+#定义带Loss的网络
+net_with_loss = WithLossCell(model)
+#包装训练网络
+train_net = TrainOneStepCell(net_with_loss, opt)
+#设置训练模式
+train_net.set_train(True)
+```
+
+---
+layout: two-cols
+---
+
+# 模型训练及验证
+
+<br>
+
+3.定义验证网络，模型输出只要属于对应问题的十个答案之一即认为正确
+
+```python
+class WithAccuracy(nn.Cell):
+    def __init__(self, model):
+        super(WithAccuracy, self).__init__(
+            auto_prefix=False)
+        self.net = model
+
+    def construct(self, q, a, img):
+        out = self.net(q, img)
+        out = ops.Argmax(output_type=mindspore.int32)(out)
+        return out, a
+#model即为训练网络中同一个model
+eval_net = WithAccuracy(model)
+#设置验证模式
+eval_net.set_train(False)
+```
+
+::right::
+
+\
+\
+\
+4.每个batch计算准确率，最后求平均得到某个epoch的验证准确率
+
+```python
+out, a = eval_net(q, a, img)
+predicted = out.asnumpy()
+ans = a.asnumpy()
+batch_size = ans.shape[0]
+acc = 0
+for i in range(batch_size):
+	if ans[i,predicted[i]]!=0:
+        acc += 1
+accuracy = acc / batch_size
+```
+
+---
+layout: center
+class: text-center
+---
+
+# Thanks
